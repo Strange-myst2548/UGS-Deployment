@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>File Browser</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8eb;
+    --muted: #8a8f98;
+    --accent: #5b8def;
+    --accent-hover: #4a7bdc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+  }
+  h1 {
+    margin: 0 0 12px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  #count {
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 14px;
+  }
+  #search {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    outline: none;
+  }
+  #search:focus {
+    border-color: var(--accent);
+  }
+  main {
+    padding: 12px 24px 40px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  li:hover {
+    background: var(--panel);
+  }
+  .path {
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+  }
+  .path mark {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 3px;
+    padding: 0 2px;
+  }
+  button.open-btn {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    font-size: 13px;
+    border-radius: 6px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+  }
+  button.open-btn:hover {
+    background: var(--accent-hover);
+  }
+  #empty {
+    color: var(--muted);
+    padding: 40px 0;
+    text-align: center;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>File Browser <span id="count"></span></h1>
+  <input type="text" id="search" placeholder="Search files by name or path..." autofocus>
+</header>
+
+<main>
+  <ul id="list"></ul>
+  <div id="empty">No files match your search.</div>
+</main>
+
+<!-- filelist.js must define: const FILES = ["path/to/a.html", "path/to/b.html", ...]; -->
+<script src="filelist.js"></script>
+<script>
+  const listEl = document.getElementById('list');
+  const searchEl = document.getElementById('search');
+  const countEl = document.getElementById('count');
+  const emptyEl = document.getElementById('empty');
+
+  // FILES comes from filelist.js. Fallback demo data if it's missing.
+  const files = (typeof FILES !== 'undefined') ? FILES : [
+    "example/demo1.html",
+    "example/demo2.html",
+    "docs/readme.html"
+  ];
+
+  countEl.textContent = `(${files.length.toLocaleString()} files)`;
+
+  function highlight(text, query) {
+    if (!query) return text;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      text.slice(0, idx) +
+      '<mark>' + text.slice(idx, idx + query.length) + '</mark>' +
+      text.slice(idx + query.length)
+    );
+  }
+
+  // Opens the file in a brand-new about:blank tab via an iframe written into it.
+  function openFile(path) {
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('Popup blocked. Please allow popups for this page.');
+      return;
+    }
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${path}</title>
+        <style>
+          html, body { margin:0; padding:0; height:100%; }
+          iframe { border:none; width:100%; height:100%; display:block; }
+        </style>
+      </head>
+      <body>
+        <iframe src="${path}"></iframe>
+      </body>
+      </html>
+    `);
+    win.document.close();
+  }
+
+  function render(query) {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? files.filter(f => f.toLowerCase().includes(q))
+      : files;
+
+    listEl.innerHTML = '';
+    emptyEl.style.display = filtered.length ? 'none' : 'block';
+
+    // Cap rendered rows for performance on very large result sets while typing broad queries
+    const MAX_RENDER = 500;
+    const toRender = filtered.slice(0, MAX_RENDER);
+
+    const frag = document.createDocumentFragment();
+    toRender.forEach(path => {
+      const li = document.createElement('li');
+
+      const span = document.createElement('span');
+      span.className = 'path';
+      span.innerHTML = highlight(path, query);
+
+      const btn = document.createElement('button');
+      btn.className = 'open-btn';
+      btn.textContent = 'Open';
+      btn.addEventListener('click', () => openFile(path));
+
+      li.appendChild(span);
+      li.appendChild(btn);
+      frag.appendChild(li);
+    });
+    listEl.appendChild(frag);
+
+    if (filtered.length > MAX_RENDER) {
+      const notice = document.createElement('li');
+      notice.style.color = 'var(--muted)';
+      notice.style.justifyContent = 'center';
+      notice.textContent = `Showing first ${MAX_RENDER} of ${filtered.length} matches — refine your search`;
+      listEl.appendChild(notice);
+    }
+  }
+
+  searchEl.addEventListener('input', () => render(searchEl.value));
+  render('');
+</script>
+
+</body>
+</html>
